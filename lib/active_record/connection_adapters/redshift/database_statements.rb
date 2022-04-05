@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -34,13 +36,13 @@ module ActiveRecord
             pp << header.center(width).rstrip
             pp << '-' * width
 
-            pp += lines.map {|line| " #{line}"}
+            pp += lines.map { |line| " #{line}" }
 
             nrows = result.rows.length
             rows_label = nrows == 1 ? 'row' : 'rows'
             pp << "(#{nrows} #{rows_label})"
 
-            pp.join("\n") + "\n"
+            "#{pp.join("\n")}\n"
           end
         end
 
@@ -95,27 +97,25 @@ module ActiveRecord
             arel, binds = binds_from_relation arel, []
             sql = to_sql(arel, binds)
           end
-          execute_and_clear(sql, name, binds) do |result|
-            result.values
-          end
+          execute_and_clear(sql, name, binds, &:values)
         end
 
         # The internal PostgreSQL identifier of the money data type.
-        MONEY_COLUMN_TYPE_OID = 790 #:nodoc:
+        MONEY_COLUMN_TYPE_OID = 790 # :nodoc:
         # The internal PostgreSQL identifier of the BYTEA data type.
-        BYTEA_COLUMN_TYPE_OID = 17 #:nodoc:
+        BYTEA_COLUMN_TYPE_OID = 17 # :nodoc:
 
         # create a 2D array representing the result set
-        def result_as_array(res) #:nodoc:
+        def result_as_array(res) # :nodoc:
           # check if we have any binary column and if they need escaping
           ftypes = Array.new(res.nfields) do |i|
             [i, res.ftype(i)]
           end
 
           rows = res.values
-          return rows unless ftypes.any? { |_, x|
-            x == BYTEA_COLUMN_TYPE_OID || x == MONEY_COLUMN_TYPE_OID
-          }
+          return rows unless ftypes.any? do |_, x|
+            [BYTEA_COLUMN_TYPE_OID, MONEY_COLUMN_TYPE_OID].include?(x)
+          end
 
           typehash = ftypes.group_by { |_, type| type }
           binaries = typehash[BYTEA_COLUMN_TYPE_OID] || []
@@ -138,9 +138,9 @@ module ActiveRecord
               #  (1) $12,345,678.12
               #  (2) $12.345.678,12
               case data
-              when /^-?\D+[\d,]+\.\d{2}$/  # (1)
+              when /^-?\D+[\d,]+\.\d{2}$/ # (1)
                 data.gsub!(/[^-\d.]/, '')
-              when /^-?\D+[\d.]+,\d{2}$/  # (2)
+              when /^-?\D+[\d.]+,\d{2}$/ # (2)
                 data.gsub!(/[^-\d,]/, '').sub!(/,/, '.')
               end
             end
@@ -148,7 +148,7 @@ module ActiveRecord
         end
 
         # Queries the database and returns the results in an Array-like object
-        def query(sql, name = nil) #:nodoc:
+        def query(sql, name = nil) # :nodoc:
           log(sql, name) do
             result_as_array @connection.async_exec(sql)
           end
@@ -176,9 +176,9 @@ module ActiveRecord
         end
 
         def exec_delete(sql, name = 'SQL', binds = [])
-          execute_and_clear(sql, name, binds) {|result| result.cmd_tuples }
+          execute_and_clear(sql, name, binds, &:cmd_tuples)
         end
-        alias :exec_update :exec_delete
+        alias exec_update exec_delete
 
         def sql_for_insert(sql, pk, id_value, sequence_name, binds)
           if pk.nil?
@@ -187,9 +187,7 @@ module ActiveRecord
             pk = primary_key(table_ref) if table_ref
           end
 
-          if pk && use_insert_returning?
-            sql = "#{sql} RETURNING #{quote_column_name(pk)}"
-          end
+          sql = "#{sql} RETURNING #{quote_column_name(pk)}" if pk && use_insert_returning?
 
           super
         end
@@ -210,7 +208,7 @@ module ActiveRecord
 
         # Begins a transaction.
         def begin_db_transaction
-          execute "BEGIN"
+          execute 'BEGIN'
         end
 
         def begin_isolated_db_transaction(isolation)
@@ -220,12 +218,12 @@ module ActiveRecord
 
         # Commits a transaction.
         def commit_db_transaction
-          execute "COMMIT"
+          execute 'COMMIT'
         end
 
         # Aborts a transaction.
         def exec_rollback_db_transaction
-          execute "ROLLBACK"
+          execute 'ROLLBACK'
         end
       end
     end

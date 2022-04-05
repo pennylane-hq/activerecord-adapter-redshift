@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -11,7 +13,11 @@ module ActiveRecord
 
           def type_cast_from_database(value)
             if value.is_a?(::String)
-              ::ActiveSupport::JSON.decode(value) rescue nil
+              begin
+                ::ActiveSupport::JSON.decode(value)
+              rescue StandardError
+                nil
+              end
             else
               super
             end

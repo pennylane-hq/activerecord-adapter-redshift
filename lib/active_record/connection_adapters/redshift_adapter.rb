@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'active_record/connection_adapters/abstract_adapter'
 require 'active_record/connection_adapters/statement_pool'
 
@@ -26,7 +28,7 @@ module ActiveRecord
                               client_encoding options application_name fallback_application_name
                               keepalives keepalives_idle keepalives_interval keepalives_count
                               tty sslmode requiressl sslcompression sslcert sslkey
-                              sslrootcert sslcrl requirepeer krbsrvname gsslib service]
+                              sslrootcert sslcrl requirepeer krbsrvname gsslib service].freeze
 
     # Establishes a connection to the database that's used by all Active Record objects
     def redshift_connection(config)
@@ -75,7 +77,7 @@ module ActiveRecord
     # In addition, default connection parameters of libpq can be set per environment variables.
     # See http://www.postgresql.org/docs/9.1/static/libpq-envars.html .
     class RedshiftAdapter < AbstractAdapter
-      ADAPTER_NAME = 'Redshift'.freeze
+      ADAPTER_NAME = 'Redshift'
 
       NATIVE_DATABASE_TYPES = {
         primary_key: 'integer identity primary key',
@@ -89,7 +91,7 @@ module ActiveRecord
         date: { name: 'date' },
         bigint: { name: 'bigint' },
         boolean: { name: 'boolean' }
-      }
+      }.freeze
 
       OID = Redshift::OID # :nodoc:
 
@@ -168,9 +170,7 @@ module ActiveRecord
         super(connection, logger, config)
 
         @visitor = Arel::Visitors::PostgreSQL.new self
-        if defined?(ConnectionAdapters::DetermineIfPreparableVisitor)
-          @visitor.extend(ConnectionAdapters::DetermineIfPreparableVisitor)
-        end
+        @visitor.extend(ConnectionAdapters::DetermineIfPreparableVisitor) if defined?(ConnectionAdapters::DetermineIfPreparableVisitor)
         @prepared_statements = false
 
         @connection_parameters = connection_parameters
@@ -320,7 +320,7 @@ module ActiveRecord
         'maximum' => 'max',
         'minimum' => 'min',
         'average' => 'avg'
-      }
+      }.freeze
 
       protected
 
@@ -376,7 +376,7 @@ module ActiveRecord
             #
             # places after decimal  = fmod - 4 & 0xffff
             # places before decimal = (fmod - 4) >> 16 & 0xffff
-            if fmod && (fmod - 4 & 0xffff).zero?
+            if fmod && (fmod - 4 & 0xffff) == 0
               # FIXME: Remove this class, and the second argument to
               # lookups on PG
               Type::DecimalWithoutScale.new(precision: precision)
@@ -435,7 +435,7 @@ module ActiveRecord
           # Object identifier types
         when /\A-?\d+\z/
           Regexp.last_match(1)
-        else
+        else # rubocop:disable Style/EmptyElse
           # Anything else is blank, some user type, or some function
           # and we can't know the value of that, so return nil.
           nil
@@ -461,18 +461,19 @@ module ActiveRecord
       end
 
       def load_types_queries(_initializer, oids)
-        query = if supports_ranges?
-                  <<-SQL
+        query =
+          if supports_ranges?
+            <<-SQL
               SELECT t.oid, t.typname, t.typelem, t.typdelim, t.typinput, r.rngsubtype, t.typtype, t.typbasetype
               FROM pg_type as t
               LEFT JOIN pg_range as r ON oid = rngtypid
-                  SQL
-                else
-                  <<-SQL
+            SQL
+          else
+            <<-SQL
               SELECT t.oid, t.typname, t.typelem, t.typdelim, t.typinput, t.typtype, t.typbasetype
               FROM pg_type as t
-                  SQL
-                end
+            SQL
+          end
 
         if oids
           yield query + 'WHERE t.oid::integer IN (%s)' % oids.join(', ')
@@ -484,13 +485,15 @@ module ActiveRecord
       FEATURE_NOT_SUPPORTED = '0A000' # :nodoc:
 
       def execute_and_clear(sql, name, binds, prepare: false, async: false)
-        result = if without_prepared_statement?(binds)
-                   exec_no_cache(sql, name, [])
-                 elsif !prepare
-                   exec_no_cache(sql, name, binds)
-                 else
-                   exec_cache(sql, name, binds)
-                 end
+        result =
+          if without_prepared_statement?(binds)
+            exec_no_cache(sql, name, [])
+          elsif !prepare
+            exec_no_cache(sql, name, binds)
+          else
+            exec_cache(sql, name, binds)
+          end
+
         ret = yield result
         result.clear
         ret
@@ -525,18 +528,14 @@ module ActiveRecord
         end
       rescue ActiveRecord::StatementInvalid => e
         raise unless is_cached_plan_failure?(e)
+        raise ActiveRecord::PreparedStatementCacheExpired, e.cause.message if in_transaction?
 
-        # Nothing we can do if we are in a transaction because all commands
-        # will raise InFailedSQLTransaction
-        if in_transaction?
-          raise ActiveRecord::PreparedStatementCacheExpired, e.cause.message
-        else
-          @lock.synchronize do
-            # outside of transactions we can simply flush this query and retry
-            @statements.delete sql_key(sql)
-          end
-          retry
+        @lock.synchronize do
+          # outside of transactions we can simply flush this query and retry
+          @statements.delete sql_key(sql)
         end
+
+        retry
       end
 
       # Annoyingly, the code for prepared statements whose return value may
@@ -658,7 +657,7 @@ module ActiveRecord
 
       def extract_table_ref_from_insert_sql(sql)
         sql[/into\s("[A-Za-z0-9_."\[\]\s]+"|[A-Za-z0-9_."\[\]]+)\s*/im]
-        Regexp.last_match(1).strip if Regexp.last_match(1)
+        Regexp.last_match(1)&.strip
       end
 
       def arel_visitor
@@ -700,21 +699,22 @@ module ActiveRecord
       end
 
       def update_typemap_for_default_timezone
-        if @default_timezone != ActiveRecord.default_timezone && @timestamp_decoder
-          decoder_class = if ActiveRecord.default_timezone == :utc
-                            PG::TextDecoder::TimestampUtc
-                          else
-                            PG::TextDecoder::TimestampWithoutTimeZone
-                          end
+        return if @default_timezone == ActiveRecord.default_timezone || !@timestamp_decoder
 
-          @timestamp_decoder = decoder_class.new(@timestamp_decoder.to_h)
-          @connection.type_map_for_results.add_coder(@timestamp_decoder)
-          @default_timezone = ActiveRecord.default_timezone
+        decoder_class =
+          if ActiveRecord.default_timezone == :utc
+            PG::TextDecoder::TimestampUtc
+          else
+            PG::TextDecoder::TimestampWithoutTimeZone
+          end
 
-          # if default timezone has changed, we need to reconfigure the connection
-          # (specifically, the session time zone)
-          configure_connection
-        end
+        @timestamp_decoder = decoder_class.new(@timestamp_decoder.to_h)
+        @connection.type_map_for_results.add_coder(@timestamp_decoder)
+        @default_timezone = ActiveRecord.default_timezone
+
+        # if default timezone has changed, we need to reconfigure the connection
+        # (specifically, the session time zone)
+        configure_connection
       end
 
       def add_pg_decoders

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -6,11 +8,12 @@ module ActiveRecord
       # schema qualified type names. +schema+ and +identifier+ are unquoted to prevent
       # double quoting.
       class Name # :nodoc:
-        SEPARATOR = "."
+        SEPARATOR = '.'
         attr_reader :schema, :identifier
 
         def initialize(schema, identifier)
-          @schema, @identifier = unquote(schema), unquote(identifier)
+          @schema = unquote(schema)
+          @identifier = unquote(identifier)
         end
 
         def to_s
@@ -25,31 +28,32 @@ module ActiveRecord
           end
         end
 
-        def ==(o)
-          o.class == self.class && o.parts == parts
+        def ==(other)
+          other.class == self.class && other.parts == parts
         end
-        alias_method :eql?, :==
+        alias eql? ==
 
         def hash
           parts.hash
         end
 
         protected
-          def unquote(part)
-            if part && part.start_with?('"')
-              part[1..-2]
-            else
-              part
-            end
-          end
 
-          def parts
-            @parts ||= [@schema, @identifier].compact
+        def unquote(part)
+          if part&.start_with?('"')
+            part[1..-2]
+          else
+            part
           end
+        end
+
+        def parts
+          @parts ||= [@schema, @identifier].compact
+        end
       end
 
       module Utils # :nodoc:
-        extend self
+        module_function
 
         # Returns an instance of <tt>ActiveRecord::ConnectionAdapters::PostgreSQL::Name</tt>
         # extracted from +string+.

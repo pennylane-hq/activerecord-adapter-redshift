@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -39,12 +41,9 @@ module ActiveRecord
           options = { encoding: 'utf8' }.merge!(options.symbolize_keys)
 
           option_string = options.inject('') do |memo, (key, value)|
-            memo += case key
-                    when :owner
-                      " OWNER = \"#{value}\""
-                    else
-                      ''
-                    end
+            next memo unless key == :owner
+
+            memo + " OWNER = \"#{value}\""
           end
 
           execute "CREATE DATABASE #{quote_table_name(name)}#{option_string}"
@@ -69,7 +68,8 @@ module ActiveRecord
           select_values('SELECT tablename FROM pg_tables WHERE schemaname = ANY(current_schemas(false))', 'SCHEMA')
         end
 
-        def data_sources # :nodoc
+        # :nodoc
+        def data_sources
           select_values(<<-SQL, 'SCHEMA')
             SELECT c.relname
             FROM pg_class c
@@ -210,10 +210,10 @@ module ActiveRecord
         #
         # This should be not be called manually but set in database.yml.
         def schema_search_path=(schema_csv)
-          if schema_csv
-            execute("SET search_path TO #{schema_csv}", 'SCHEMA')
-            @schema_search_path = schema_csv
-          end
+          return unless schema_csv
+
+          execute("SET search_path TO #{schema_csv}", 'SCHEMA')
+          @schema_search_path = schema_csv
         end
 
         # Returns the active schema search path.
@@ -360,12 +360,14 @@ module ActiveRecord
           end
         end
 
-        def extract_foreign_key_action(specifier) # :nodoc:
-          case specifier
-          when 'c' then :cascade
-          when 'n' then :nullify
-          when 'r' then :restrict
-          end
+        FOREIGN_KEY_ACTIONS = {
+          'c' => :cascade,
+          'n' => :nullify,
+          'r' => :restrict
+        }.freeze
+
+        def extract_foreign_key_action(specifier)
+          FOREIGN_KEY_ACTIONS[specifier]
         end
 
         def index_name_length
@@ -394,12 +396,16 @@ module ActiveRecord
         # requires that the ORDER BY include the distinct column.
         def columns_for_distinct(columns, orders) # :nodoc:
           order_columns = orders.reject(&:blank?).map  do |s|
-                            # Convert Arel node to string
-                            s = s.to_sql unless s.is_a?(String)
-                            # Remove any ASC/DESC modifiers
-                            s.gsub(/\s+(?:ASC|DESC)\b/i, '')
-                             .gsub(/\s+NULLS\s+(?:FIRST|LAST)\b/i, '')
-                          end.reject(&:blank?).map.with_index { |column, i| "#{column} AS alias_#{i}" }
+            # Convert Arel node to string
+            s = s.to_sql unless s.is_a?(String)
+            # Remove any ASC/DESC modifiers
+            s.gsub(/\s+(?:ASC|DESC)\b/i, '')
+              .gsub(/\s+NULLS\s+(?:FIRST|LAST)\b/i, '')
+          end
+
+          order_columns = order_columns
+            .reject(&:blank?)
+            .map.with_index { |column, i| "#{column} AS alias_#{i}" }
 
           [super, *order_columns].join(', ')
         end

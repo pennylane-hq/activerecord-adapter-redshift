@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -5,8 +7,8 @@ module ActiveRecord
         class DateTime < Type::DateTime # :nodoc:
           def type_cast_for_database(value)
             if has_precision? && value.acts_like?(:time) && value.year <= 0
-              bce_year = format("%04d", -value.year + 1)
-              super.sub(/^-?\d+/, bce_year) + " BC"
+              bce_year = format('%04d', -value.year + 1)
+              "#{super.sub(/^-?\d+/, bce_year)} BC"
             else
               super
             end
@@ -18,8 +20,8 @@ module ActiveRecord
               when 'infinity' then ::Float::INFINITY
               when '-infinity' then -::Float::INFINITY
               when / BC$/
-                astronomical_year = format("%04d", -value[/^\d+/].to_i + 1)
-                super(value.sub(/ BC$/, "").sub(/^\d+/, astronomical_year))
+                astronomical_year = format('%04d', -value[/^\d+/].to_i + 1)
+                super(value.sub(/ BC$/, '').sub(/^\d+/, astronomical_year))
               else
                 super
               end

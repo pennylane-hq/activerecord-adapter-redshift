@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -14,15 +16,10 @@ module ActiveRecord
           end
 
           def run(records)
-            nodes = records.reject { |row| @store.key? row['oid'].to_i }
-            mapped, nodes = nodes.partition { |row| @store.key? row['typname'] }
-            ranges, nodes = nodes.partition { |row| row['typtype'] == 'r'.freeze }
-            enums, nodes = nodes.partition { |row| row['typtype'] == 'e'.freeze }
-            domains, nodes = nodes.partition { |row| row['typtype'] == 'd'.freeze }
-            arrays, nodes = nodes.partition { |row| row['typinput'] == 'array_in'.freeze }
-            composites, nodes = nodes.partition { |row| row['typelem'].to_i != 0 }
-
-            mapped.each     { |row| register_mapped_type(row)    }
+            records
+              .reject { |row| @store.key? row['oid'].to_i }
+              .select { |row| @store.key? row['typname'] }
+              .each { |row| register_mapped_type(row) }
           end
 
           private
@@ -46,15 +43,16 @@ module ActiveRecord
           end
 
           def register_with_subtype(oid, target_oid)
-            if @store.key?(target_oid)
-              register(oid) do |_, *args|
-                yield @store.lookup(target_oid, *args)
-              end
+            return unless @store.key?(target_oid)
+
+            register(oid) do |_, *args|
+              yield @store.lookup(target_oid, *args)
             end
           end
 
           def assert_valid_registration(oid, oid_type)
             raise ArgumentError, "can't register nil type for OID #{oid}" if oid_type.nil?
+
             oid.to_i
           end
         end

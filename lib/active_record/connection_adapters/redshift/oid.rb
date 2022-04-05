@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'active_record/connection_adapters/redshift/oid/date_time'
 require 'active_record/connection_adapters/redshift/oid/decimal'
 require 'active_record/connection_adapters/redshift/oid/json'

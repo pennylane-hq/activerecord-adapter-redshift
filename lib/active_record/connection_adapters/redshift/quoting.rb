@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
@@ -51,7 +53,7 @@ module ActiveRecord
 
           if value.year <= 0
             bce_year = format('%04d', -value.year + 1)
-            result = result.sub(/^-?\d+/, bce_year) + ' BC'
+            result = "#{result.sub(/^-?\d+/, bce_year)} BC"
           end
           result
         end
