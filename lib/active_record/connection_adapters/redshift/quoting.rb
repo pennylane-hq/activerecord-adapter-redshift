@@ -15,7 +15,7 @@ module ActiveRecord
         end
 
         # Quotes strings for use in SQL input.
-        def quote_string(s) #:nodoc:
+        def quote_string(s) # :nodoc:
           @connection.escape(s)
         end
 
@@ -31,12 +31,12 @@ module ActiveRecord
           Utils.extract_schema_qualified_name(name.to_s).quoted
         end
 
-        def quote_table_name_for_assignment(table, attr)
+        def quote_table_name_for_assignment(_table, attr)
           quote_column_name(attr)
         end
 
         # Quotes column names for use in SQL queries.
-        def quote_column_name(name) #:nodoc:
+        def quote_column_name(name) # :nodoc:
           PG::Connection.quote_ident(name.to_s)
         end
 
@@ -46,18 +46,18 @@ module ActiveRecord
         end
 
         # Quote date/time values for use in SQL input.
-        def quoted_date(value) #:nodoc:
+        def quoted_date(value) # :nodoc:
           result = super
 
           if value.year <= 0
-            bce_year = format("%04d", -value.year + 1)
-            result = result.sub(/^-?\d+/, bce_year) + " BC"
+            bce_year = format('%04d', -value.year + 1)
+            result = result.sub(/^-?\d+/, bce_year) + ' BC'
           end
           result
         end
 
         # Does not quote function default values for UUID columns
-        def quote_default_value(value, column) #:nodoc:
+        def quote_default_value(value, column) # :nodoc:
           if column.type == :uuid && value =~ /\(\)/
             value
           else
@@ -65,9 +65,7 @@ module ActiveRecord
           end
         end
 
-        private
-
-        def _quote(value)
+        def quote(value)
           case value
           when Type::Binary::Data
             "'#{escape_bytea(value.to_s)}'"
@@ -82,7 +80,7 @@ module ActiveRecord
           end
         end
 
-        def _type_cast(value)
+        def type_cast(value)
           case value
           when Type::Binary::Data
             # Return a bind param hash with format as binary.

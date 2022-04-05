@@ -1,41 +1,20 @@
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
+      class SchemaCreation < SchemaCreation
+        private
 
-      if ActiveRecord::VERSION::MAJOR >= 6 && ActiveRecord::VERSION::MINOR >= 1
-        class SchemaCreation < SchemaCreation
-          private
-
-          def visit_ColumnDefinition(o)
-            o.sql_type = type_to_sql(o.type, limit: o.limit, precision: o.precision, scale: o.scale)
-            super
-          end
-
-          def add_column_options!(sql, options)
-            column = options.fetch(:column) { return super }
-            if column.type == :uuid && options[:default] =~ /\(\)/
-              sql << " DEFAULT #{options[:default]}"
-            else
-              super
-            end
-          end
+        def visit_ColumnDefinition(o)
+          o.sql_type = type_to_sql(o.type, limit: o.limit, precision: o.precision, scale: o.scale)
+          super
         end
-      else
-        class SchemaCreation < AbstractAdapter::SchemaCreation
-          private
 
-          def visit_ColumnDefinition(o)
-            o.sql_type = type_to_sql(o.type, limit: o.limit, precision: o.precision, scale: o.scale)
+        def add_column_options!(sql, options)
+          column = options.fetch(:column) { return super }
+          if column.type == :uuid && options[:default] =~ /\(\)/
+            sql << " DEFAULT #{options[:default]}"
+          else
             super
-          end
-
-          def add_column_options!(sql, options)
-            column = options.fetch(:column) { return super }
-            if column.type == :uuid && options[:default] =~ /\(\)/
-              sql << " DEFAULT #{options[:default]}"
-            else
-              super
-            end
           end
         end
       end
@@ -43,7 +22,7 @@ module ActiveRecord
       module SchemaStatements
         # Drops the database specified on the +name+ attribute
         # and creates it again using the provided +options+.
-        def recreate_database(name, **options) #:nodoc:
+        def recreate_database(name, **options) # :nodoc:
           drop_database(name)
           create_database(name, options)
         end
@@ -59,13 +38,13 @@ module ActiveRecord
         def create_database(name, **options)
           options = { encoding: 'utf8' }.merge!(options.symbolize_keys)
 
-          option_string = options.inject("") do |memo, (key, value)|
+          option_string = options.inject('') do |memo, (key, value)|
             memo += case key
-            when :owner
-              " OWNER = \"#{value}\""
-            else
-              ""
-            end
+                    when :owner
+                      " OWNER = \"#{value}\""
+                    else
+                      ''
+                    end
           end
 
           execute "CREATE DATABASE #{quote_table_name(name)}#{option_string}"
@@ -75,7 +54,7 @@ module ActiveRecord
         #
         # Example:
         #   drop_database 'matt_development'
-        def drop_database(name) #:nodoc:
+        def drop_database(name) # :nodoc:
           execute "DROP DATABASE #{quote_table_name(name)}"
         end
 
@@ -87,7 +66,7 @@ module ActiveRecord
             MSG
           end
 
-          select_values("SELECT tablename FROM pg_tables WHERE schemaname = ANY(current_schemas(false))", 'SCHEMA')
+          select_values('SELECT tablename FROM pg_tables WHERE schemaname = ANY(current_schemas(false))', 'SCHEMA')
         end
 
         def data_sources # :nodoc
@@ -100,10 +79,10 @@ module ActiveRecord
           SQL
         end
 
-         # Returns true if table exists.
-         # If the schema is not specified as part of +name+ then it will only find tables within
-         # the current schema search path (regardless of permissions to access tables in other schemas)
-         def table_exists?(name)
+        # Returns true if table exists.
+        # If the schema is not specified as part of +name+ then it will only find tables within
+        # the current schema search path (regardless of permissions to access tables in other schemas)
+        def table_exists?(name)
           ActiveSupport::Deprecation.warn(<<-MSG.squish)
             #table_exists? currently checks both tables and views.
             This behavior is deprecated and will be changed with Rails 5.1 to only check tables.
@@ -160,12 +139,12 @@ module ActiveRecord
           select_value("SELECT COUNT(*) FROM pg_namespace WHERE nspname = '#{name}'", 'SCHEMA').to_i > 0
         end
 
-        def index_name_exists?(table_name, index_name, default)
+        def index_name_exists?(_table_name, _index_name, _default)
           false
         end
 
         # Returns an array of indexes for the given table.
-        def indexes(table_name, name = nil)
+        def indexes(_table_name, _name = nil)
           []
         end
 
@@ -179,7 +158,7 @@ module ActiveRecord
           end
         end
 
-        def new_column(name, default, sql_type_metadata = nil, null = true, table_name = nil, default_function = nil) # :nodoc:
+        def new_column(name, default, sql_type_metadata = nil, null = true, _table_name = nil, default_function = nil) # :nodoc:
           RedshiftColumn.new(name, default, sql_type_metadata, null, default_function)
         end
 
@@ -195,14 +174,14 @@ module ActiveRecord
 
         # Returns the current database encoding format.
         def encoding
-          select_value("SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname LIKE '#{current_database}'", 'SCHEMA')
+          select_value(
+            "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname LIKE '#{current_database}'", 'SCHEMA'
+          )
         end
 
-        def collation
-        end
+        def collation; end
 
-        def ctype
-        end
+        def ctype; end
 
         # Returns an array of schema names.
         def schema_names
@@ -216,7 +195,7 @@ module ActiveRecord
         end
 
         # Creates a schema for the given schema name.
-        def create_schema schema_name
+        def create_schema(schema_name)
           execute "CREATE SCHEMA #{quote_schema_name(schema_name)}"
         end
 
@@ -243,9 +222,10 @@ module ActiveRecord
         end
 
         # Returns the sequence name for a table's primary key or some other specified key.
-        def default_sequence_name(table_name, pk = nil) #:nodoc:
+        def default_sequence_name(table_name, pk = nil) # :nodoc:
           result = serial_sequence(table_name, pk || 'id')
           return nil unless result
+
           Utils.extract_schema_qualified_name(result).to_s
         rescue ActiveRecord::StatementInvalid
           Redshift::Name.new(nil, "#{table_name}_#{pk || 'id'}_seq").to_s
@@ -255,26 +235,24 @@ module ActiveRecord
           select_value("SELECT pg_get_serial_sequence('#{table}', '#{column}')", 'SCHEMA')
         end
 
-        def set_pk_sequence!(table, value) #:nodoc:
-        end
+        def set_pk_sequence!(table, value); end
 
-        def reset_pk_sequence!(table, pk = nil, sequence = nil) #:nodoc:
-        end
+        def reset_pk_sequence!(table, pk = nil, sequence = nil); end
 
-        def pk_and_sequence_for(table) #:nodoc:
+        def pk_and_sequence_for(_table) # :nodoc:
           [nil, nil]
         end
 
         # Returns just a table's primary key
         def primary_keys(table)
-          pks = query(<<-end_sql, 'SCHEMA')
+          pks = query(<<-END_SQL, 'SCHEMA')
             SELECT DISTINCT attr.attname
             FROM pg_attribute attr
             INNER JOIN pg_depend dep ON attr.attrelid = dep.refobjid AND attr.attnum = dep.refobjsubid
             INNER JOIN pg_constraint cons ON attr.attrelid = cons.conrelid AND attr.attnum = any(cons.conkey)
             WHERE cons.contype = 'p'
               AND dep.refobjid = '#{quote_table_name(table)}'::regclass
-          end_sql
+          END_SQL
           pks.present? ? pks[0] : pks
         end
 
@@ -289,7 +267,7 @@ module ActiveRecord
           execute "ALTER TABLE #{quote_table_name(table_name)} RENAME TO #{quote_table_name(new_name)}"
         end
 
-        def add_column(table_name, column_name, type, **options) #:nodoc:
+        def add_column(table_name, column_name, type, **options) # :nodoc:
           clear_cache!
           super
         end
@@ -302,7 +280,8 @@ module ActiveRecord
           sql = "ALTER TABLE #{quoted_table_name} ALTER COLUMN #{quote_column_name(column_name)} TYPE #{sql_type}"
           sql << " USING #{options[:using]}" if options[:using]
           if options[:cast_as]
-            sql << " USING CAST(#{quote_column_name(column_name)} AS #{type_to_sql(options[:cast_as], limit: options[:limit], precision: options[:precision], scale: options[:scale])})"
+            sql << " USING CAST(#{quote_column_name(column_name)} AS #{type_to_sql(options[:cast_as],
+                                                                                   limit: options[:limit], precision: options[:precision], scale: options[:scale])})"
           end
           execute sql
 
@@ -321,7 +300,7 @@ module ActiveRecord
           if default.nil?
             # <tt>DEFAULT NULL</tt> results in the same behavior as <tt>DROP DEFAULT</tt>. However, PostgreSQL will
             # cast the default to the columns type, which leaves us with a default like "default NULL::character varying".
-            execute alter_column_query % "DROP DEFAULT"
+            execute alter_column_query % 'DROP DEFAULT'
           else
             execute alter_column_query % "SET DEFAULT #{quote_default_value(default, column)}"
           end
@@ -331,25 +310,26 @@ module ActiveRecord
           clear_cache!
           unless null || default.nil?
             column = column_for(table_name, column_name)
-            execute("UPDATE #{quote_table_name(table_name)} SET #{quote_column_name(column_name)}=#{quote_default_value(default, column)} WHERE #{quote_column_name(column_name)} IS NULL") if column
+            if column
+              execute("UPDATE #{quote_table_name(table_name)} SET #{quote_column_name(column_name)}=#{quote_default_value(
+                default, column
+              )} WHERE #{quote_column_name(column_name)} IS NULL")
+            end
           end
           execute("ALTER TABLE #{quote_table_name(table_name)} ALTER #{quote_column_name(column_name)} #{null ? 'DROP' : 'SET'} NOT NULL")
         end
 
         # Renames a column in a table.
-        def rename_column(table_name, column_name, new_column_name) #:nodoc:
+        def rename_column(table_name, column_name, new_column_name) # :nodoc:
           clear_cache!
           execute "ALTER TABLE #{quote_table_name(table_name)} RENAME COLUMN #{quote_column_name(column_name)} TO #{quote_column_name(new_column_name)}"
         end
 
-        def add_index(table_name, column_name, **options) #:nodoc:
-        end
+        def add_index(table_name, column_name, **options); end
 
-        def remove_index!(table_name, index_name) #:nodoc:
-        end
+        def remove_index!(table_name, index_name); end
 
-        def rename_index(table_name, old_name, new_name)
-        end
+        def rename_index(table_name, old_name, new_name); end
 
         def foreign_keys(table_name)
           fk_info = select_all(<<-SQL.strip_heredoc, 'SCHEMA')
@@ -382,9 +362,9 @@ module ActiveRecord
 
         def extract_foreign_key_action(specifier) # :nodoc:
           case specifier
-          when 'c'; :cascade
-          when 'n'; :nullify
-          when 'r'; :restrict
+          when 'c' then :cascade
+          when 'n' then :nullify
+          when 'r' then :restrict
           end
         end
 
@@ -399,10 +379,11 @@ module ActiveRecord
             return 'integer' unless limit
 
             case limit
-              when 1, 2; 'smallint'
-              when nil, 3, 4; 'integer'
-              when 5..8; 'bigint'
-              else raise(ActiveRecordError, "No integer type has byte size #{limit}. Use a numeric with precision 0 instead.")
+            when 1, 2 then 'smallint'
+            when nil, 3, 4 then 'integer'
+            when 5..8 then 'bigint'
+            else raise(ActiveRecordError,
+                       "No integer type has byte size #{limit}. Use a numeric with precision 0 instead.")
             end
           else
             super
@@ -411,14 +392,14 @@ module ActiveRecord
 
         # PostgreSQL requires the ORDER BY columns in the select list for distinct queries, and
         # requires that the ORDER BY include the distinct column.
-        def columns_for_distinct(columns, orders) #:nodoc:
-          order_columns = orders.reject(&:blank?).map{ |s|
-              # Convert Arel node to string
-              s = s.to_sql unless s.is_a?(String)
-              # Remove any ASC/DESC modifiers
-              s.gsub(/\s+(?:ASC|DESC)\b/i, '')
-               .gsub(/\s+NULLS\s+(?:FIRST|LAST)\b/i, '')
-            }.reject(&:blank?).map.with_index { |column, i| "#{column} AS alias_#{i}" }
+        def columns_for_distinct(columns, orders) # :nodoc:
+          order_columns = orders.reject(&:blank?).map  do |s|
+                            # Convert Arel node to string
+                            s = s.to_sql unless s.is_a?(String)
+                            # Remove any ASC/DESC modifiers
+                            s.gsub(/\s+(?:ASC|DESC)\b/i, '')
+                             .gsub(/\s+NULLS\s+(?:FIRST|LAST)\b/i, '')
+                          end.reject(&:blank?).map.with_index { |column, i| "#{column} AS alias_#{i}" }
 
           [super, *order_columns].join(', ')
         end
@@ -430,7 +411,7 @@ module ActiveRecord
             type: cast_type.type,
             limit: cast_type.limit,
             precision: cast_type.precision,
-            scale: cast_type.scale,
+            scale: cast_type.scale
           )
           TypeMetadata.new(simple_type, oid: oid, fmod: fmod)
         end
