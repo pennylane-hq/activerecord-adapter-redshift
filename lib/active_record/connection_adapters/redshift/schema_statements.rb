@@ -3,7 +3,7 @@
 module ActiveRecord
   module ConnectionAdapters
     module Redshift
-      class SchemaCreation < SchemaCreation
+      class SchemaCreation < ::ActiveRecord::ConnectionAdapters::SchemaCreation
         private
 
         def visit_ColumnDefinition(o)
