@@ -385,6 +385,19 @@ module ActiveRecord
             end
           end
         end
+
+        private
+
+        def extract_limit(sql_type) # :nodoc:
+          case sql_type
+          when /^bigint/i, /^int8/i
+            8
+          when /^smallint/i
+            2
+          else
+            super
+          end
+        end
       end
 
       private
@@ -407,17 +420,6 @@ module ActiveRecord
       def initialize_type_map(m = type_map)
         self.class.initialize_type_map(m)
         load_additional_types(m)
-      end
-
-      def extract_limit(sql_type) # :nodoc:
-        case sql_type
-        when /^bigint/i, /^int8/i
-          8
-        when /^smallint/i
-          2
-        else
-          super
-        end
       end
 
       # Extracts the value from a PostgreSQL column default definition.
