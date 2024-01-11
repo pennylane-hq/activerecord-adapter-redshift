@@ -139,7 +139,7 @@ module ActiveRecord
       class StatementPool < ConnectionAdapters::StatementPool # :nodoc:
         def initialize(connection, max)
           super(max)
-          @connection = connection
+          @raw_connection = connection
           @counter = 0
         end
 
@@ -154,12 +154,12 @@ module ActiveRecord
         private
 
         def dealloc(key)
-          @connection.query "DEALLOCATE #{key}" if connection_active?
+          @raw_connection.query "DEALLOCATE #{key}" if connection_active?
         rescue PG::Error
         end
 
         def connection_active?
-          @connection.status == PG::CONNECTION_OK
+          @raw_connection.status == PG::CONNECTION_OK
         rescue PG::Error
           false
         end
@@ -173,14 +173,14 @@ module ActiveRecord
         @visitor.extend(ConnectionAdapters::DetermineIfPreparableVisitor) if defined?(ConnectionAdapters::DetermineIfPreparableVisitor)
         @prepared_statements = false
 
-        @connection_parameters = connection_parameters
+        @raw_connection_parameters = connection_parameters
 
         # @local_tz is initialized as nil to avoid warnings when connect tries to use it
         @local_tz = nil
         @table_alias_length = nil
 
         connect
-        @statements = StatementPool.new @connection,
+        @statements = StatementPool.new @raw_connection,
                                         self.class.type_cast_config_to_integer(config[:statement_limit])
 
         @type_map = Type::HashLookupTypeMap.new
@@ -200,7 +200,7 @@ module ActiveRecord
 
       # Is this connection alive and ready for queries?
       def active?
-        @connection.query 'SELECT 1'
+        @raw_connection.query 'SELECT 1'
         true
       rescue PG::Error
         false
@@ -214,7 +214,7 @@ module ActiveRecord
       # Close then reopen the connection.
       def reconnect!
         super
-        @connection.reset
+        @raw_connection.reset
         configure_connection
         reload_type_map
       end
@@ -222,8 +222,8 @@ module ActiveRecord
       def reset!
         clear_cache!
         reset_transaction
-        @connection.query 'ROLLBACK' unless @connection.transaction_status == ::PG::PQTRANS_IDLE
-        @connection.query 'DISCARD ALL'
+        @raw_connection.query 'ROLLBACK' unless @raw_connection.transaction_status == ::PG::PQTRANS_IDLE
+        @raw_connection.query 'DISCARD ALL'
         configure_connection
       end
 
@@ -232,7 +232,7 @@ module ActiveRecord
       def disconnect!
         super
         begin
-          @connection.close
+          @raw_connection.close
         rescue StandardError
           nil
         end
@@ -326,7 +326,7 @@ module ActiveRecord
 
       # Returns the version of the connected PostgreSQL server.
       def redshift_version
-        @connection.server_version
+        @raw_connection.server_version
       end
 
       def translate_exception(exception, message:, sql:, binds:)
@@ -509,7 +509,7 @@ module ActiveRecord
         type_casted_binds = type_casted_binds(binds)
         log(sql, name, binds, type_casted_binds) do
           ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
-            @connection.exec_params(sql, type_casted_binds)
+            @raw_connection.exec_params(sql, type_casted_binds)
           end
         end
       end
@@ -523,7 +523,7 @@ module ActiveRecord
 
         log(sql, name, binds, type_casted_binds, stmt_key) do
           ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
-            @connection.exec_prepared(stmt_key, type_casted_binds)
+            @raw_connection.exec_prepared(stmt_key, type_casted_binds)
           end
         end
       rescue ActiveRecord::StatementInvalid => e
@@ -570,12 +570,12 @@ module ActiveRecord
           unless @statements.key? sql_key
             nextkey = @statements.next_key
             begin
-              @connection.prepare nextkey, sql
+              @raw_connection.prepare nextkey, sql
             rescue StandardError => e
               raise translate_exception_class(e, sql, binds)
             end
             # Clear the queue
-            @connection.get_last_result
+            @raw_connection.get_last_result
             @statements[sql_key] = nextkey
           end
           @statements[sql_key]
@@ -585,7 +585,8 @@ module ActiveRecord
       # Connects to a PostgreSQL server and sets up the adapter depending on the
       # connected server's characteristics.
       def connect
-        @connection = PG.connect(@connection_parameters)
+        @raw_connection = PG.connect(@raw_connection_parameters)
+        @connection = @raw_connection if ::Rails::VERSION::MINOR == 0
         configure_connection
         add_pg_encoders
         add_pg_decoders
@@ -594,7 +595,7 @@ module ActiveRecord
       # Configures the encoding, verbosity, schema search path, and time zone of the connection.
       # This is called by #connect and should not be called manually.
       def configure_connection
-        @connection.set_client_encoding(@config[:encoding]) if @config[:encoding]
+        @raw_connection.set_client_encoding(@config[:encoding]) if @config[:encoding]
         self.schema_search_path = @config[:schema_search_path] || @config[:schema_order]
 
         variables = @config.fetch(:variables, {}).stringify_keys
@@ -665,7 +666,7 @@ module ActiveRecord
       end
 
       def build_statement_pool
-        StatementPool.new(@connection, self.class.type_cast_config_to_integer(@config[:statement_limit]))
+        StatementPool.new(@raw_connection, self.class.type_cast_config_to_integer(@config[:statement_limit]))
       end
 
       def can_perform_case_insensitive_comparison_for?(column)
@@ -695,7 +696,7 @@ module ActiveRecord
         map[Integer] = PG::TextEncoder::Integer.new
         map[TrueClass] = PG::TextEncoder::Boolean.new
         map[FalseClass] = PG::TextEncoder::Boolean.new
-        @connection.type_map_for_queries = map
+        @raw_connection.type_map_for_queries = map
       end
 
       def update_typemap_for_default_timezone
@@ -709,7 +710,7 @@ module ActiveRecord
           end
 
         @timestamp_decoder = decoder_class.new(@timestamp_decoder.to_h)
-        @connection.type_map_for_results.add_coder(@timestamp_decoder)
+        @raw_connection.type_map_for_results.add_coder(@timestamp_decoder)
         @default_timezone = ActiveRecord.default_timezone
 
         # if default timezone has changed, we need to reconfigure the connection
@@ -749,7 +750,7 @@ module ActiveRecord
 
         map = PG::TypeMapByOid.new
         coders.each { |coder| map.add_coder(coder) }
-        @connection.type_map_for_results = map
+        @raw_connection.type_map_for_results = map
 
         # extract timestamp decoder for use in update_typemap_for_default_timezone
         @timestamp_decoder = coders.find { |coder| coder.name == 'timestamp' }
