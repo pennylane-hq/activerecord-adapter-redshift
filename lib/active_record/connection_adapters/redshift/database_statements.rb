@@ -181,7 +181,7 @@ module ActiveRecord
         end
         alias exec_update exec_delete
 
-        def sql_for_insert(sql, pk, binds)
+        def sql_for_insert(sql, pk, binds, returning)
           if pk.nil?
             # Extract the table from the insert sql. Yuck.
             table_ref = extract_table_ref_from_insert_sql(sql)
@@ -193,7 +193,7 @@ module ActiveRecord
           super
         end
 
-        def exec_insert(sql, name, binds, pk = nil, sequence_name = nil)
+        def exec_insert(sql, name, binds, pk = nil, sequence_name = nil, returning: nil)
           val = exec_query(sql, name, binds)
           if !use_insert_returning? && pk
             unless sequence_name
