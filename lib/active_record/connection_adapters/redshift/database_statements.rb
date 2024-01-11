@@ -176,7 +176,7 @@ module ActiveRecord
         end
         alias internal_exec_query exec_query
 
-        def exec_delete(sql, name = 'SQL', binds = [])
+        def exec_delete(sql, name = nil, binds = [])
           execute_and_clear(sql, name, binds, &:cmd_tuples)
         end
         alias exec_update exec_delete
@@ -193,7 +193,7 @@ module ActiveRecord
           super
         end
 
-        def exec_insert(sql, name, binds, pk = nil, sequence_name = nil, returning: nil)
+        def exec_insert(sql, name = nil, binds = [], pk = nil, sequence_name = nil, returning: nil)
           val = exec_query(sql, name, binds)
           if !use_insert_returning? && pk
             unless sequence_name
