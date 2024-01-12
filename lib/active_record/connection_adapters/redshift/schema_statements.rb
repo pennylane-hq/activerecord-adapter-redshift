@@ -139,7 +139,7 @@ module ActiveRecord
           select_value("SELECT COUNT(*) FROM pg_namespace WHERE nspname = '#{name}'", 'SCHEMA').to_i > 0
         end
 
-        def index_name_exists?(_table_name, _index_name, _default)
+        def index_name_exists?(_table_name, _index_name)
           false
         end
 
