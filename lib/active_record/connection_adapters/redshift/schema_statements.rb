@@ -144,7 +144,7 @@ module ActiveRecord
         end
 
         # Returns an array of indexes for the given table.
-        def indexes(_table_name, _name = nil)
+        def indexes(_table_name)
           []
         end
 
