@@ -1,4 +1,4 @@
-activerecord7-redshift-adapter
+activerecord-adapter-redshift
 ==============================
 
 Amazon Redshift adapter for ActiveRecord 7 (Rails 7).
@@ -13,7 +13,7 @@ Usage
 For Rails 7, write following in Gemfile:
 
 ```ruby
-gem 'activerecord7-redshift-adapter-pennylane'
+gem 'activerecord-adapter-redshift'
 ```
 
 In database.yml
