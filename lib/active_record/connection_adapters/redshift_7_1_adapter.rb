@@ -585,7 +585,6 @@ module ActiveRecord
       # connected server's characteristics.
       def connect
         @raw_connection = PG.connect(@raw_connection_parameters)
-        @connection = @raw_connection if ::Rails::VERSION::MINOR == 0
         configure_connection
         add_pg_encoders
         add_pg_decoders

@@ -5,5 +5,5 @@ if ActiveRecord.version >= Gem::Version.new('7.1.0')
 elsif ActiveRecord.version >= Gem::Version.new('7.0.0')
   require_relative 'redshift_7_0_adapter'
 else
-  raise ArgumentError
+  raise 'no compatible version of ActiveRecord detected'
 end
