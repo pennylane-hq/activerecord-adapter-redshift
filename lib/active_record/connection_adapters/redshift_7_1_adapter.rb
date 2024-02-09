@@ -580,6 +580,7 @@ module ActiveRecord
         configure_connection
         add_pg_encoders
         add_pg_decoders
+        reload_type_map
       end
 
       def reconnect
