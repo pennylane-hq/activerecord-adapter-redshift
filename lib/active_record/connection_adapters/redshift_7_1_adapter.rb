@@ -210,6 +210,16 @@ module ActiveRecord
         initialize_type_map
       end
 
+      # Close then reopen the connection.
+      def reconnect!(**options)
+        clear_cache!(new_connection: true)
+        reset_transaction
+
+        @raw_connection.reset
+        configure_connection
+        reload_type_map
+      end
+
       def reset!
         clear_cache!
         reset_transaction
@@ -580,17 +590,6 @@ module ActiveRecord
         configure_connection
         add_pg_encoders
         add_pg_decoders
-        reload_type_map
-      end
-
-      def reconnect
-        begin
-          @raw_connection&.reset
-        rescue PG::ConnectionBad
-          @raw_connection = nil
-        end
-
-        connect unless @raw_connection
       end
 
       # Configures the encoding, verbosity, schema search path, and time zone of the connection.
