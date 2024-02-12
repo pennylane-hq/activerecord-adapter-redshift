@@ -57,14 +57,8 @@ module ActiveRecord
           execute "DROP DATABASE #{quote_table_name(name)}"
         end
 
-        # Returns the list of all tables in the schema search path or a specified schema.
-        def tables(name = nil)
-          if name
-            ActiveSupport::Deprecation.warn(<<-MSG.squish)
-              Passing arguments to #tables is deprecated without replacement.
-            MSG
-          end
-
+        # Returns an array of table names defined in the database.
+        def tables
           select_values('SELECT tablename FROM pg_tables WHERE schemaname = ANY(current_schemas(false))', 'SCHEMA')
         end
 
