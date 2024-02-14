@@ -4,227 +4,174 @@ module ActiveRecord
   module ConnectionAdapters
     module Redshift
       module DatabaseStatements
-        def explain(arel, binds = [])
-          sql = "EXPLAIN #{to_sql(arel, binds)}"
-          ExplainPrettyPrinter.new.pp(exec_query(sql, 'EXPLAIN', binds))
-        end
-
-        class ExplainPrettyPrinter # :nodoc:
-          # Pretty prints the result of a EXPLAIN in a way that resembles the output of the
-          # PostgreSQL shell:
-          #
-          #                                     QUERY PLAN
-          #   ------------------------------------------------------------------------------
-          #    Nested Loop Left Join  (cost=0.00..37.24 rows=8 width=0)
-          #      Join Filter: (posts.user_id = users.id)
-          #      ->  Index Scan using users_pkey on users  (cost=0.00..8.27 rows=1 width=4)
-          #            Index Cond: (id = 1)
-          #      ->  Seq Scan on posts  (cost=0.00..28.88 rows=8 width=4)
-          #            Filter: (posts.user_id = 1)
-          #   (6 rows)
-          #
-          def pp(result)
-            header = result.columns.first
-            lines  = result.rows.map(&:first)
-
-            # We add 2 because there's one char of padding at both sides, note
-            # the extra hyphens in the example above.
-            width = [header, *lines].map(&:length).max + 2
-
-            pp = []
-
-            pp << header.center(width).rstrip
-            pp << '-' * width
-
-            pp += lines.map { |line| " #{line}" }
-
-            nrows = result.rows.length
-            rows_label = nrows == 1 ? 'row' : 'rows'
-            pp << "(#{nrows} #{rows_label})"
-
-            "#{pp.join("\n")}\n"
-          end
-        end
-
-        def select_value(arel, name = nil, binds = [])
-          # In Rails 5.2, arel_from_relation replaced binds_from_relation,
-          # so we see which method exists to get the variables
-          #
-          # In Rails 6.0 to_sql_and_binds began only returning sql, with
-          # to_sql_and_binds serving as a replacement
-          if respond_to?(:arel_from_relation, true)
-            arel = arel_from_relation(arel)
-            sql, binds = to_sql_and_binds(arel, binds)
-          else
-            arel, binds = binds_from_relation arel, binds
-            sql = to_sql(arel, binds)
-          end
-          execute_and_clear(sql, name, binds) do |result|
-            result.getvalue(0, 0) if result.ntuples > 0 && result.nfields > 0
-          end
-        end
-
-        def select_values(arel, name = nil)
-          # In Rails 5.2, arel_from_relation replaced binds_from_relation,
-          # so we see which method exists to get the variables
-          #
-          # In Rails 6.0 to_sql_and_binds began only returning sql, with
-          # to_sql_and_binds serving as a replacement
-          if respond_to?(:arel_from_relation, true)
-            arel = arel_from_relation(arel)
-            sql, binds = to_sql_and_binds(arel, [])
-          else
-            arel, binds = binds_from_relation arel, []
-            sql = to_sql(arel, binds)
-          end
-
-          execute_and_clear(sql, name, binds) do |result|
-            if result.nfields > 0
-              result.column_values(0)
-            else
-              []
-            end
-          end
-        end
-
-        # Executes a SELECT query and returns an array of rows. Each row is an
-        # array of field values.
-        def select_rows(arel, name = nil, binds = [])
-          if respond_to?(:arel_from_relation, true)
-            arel = arel_from_relation(arel)
-            sql, binds = to_sql_and_binds(arel, [])
-          else
-            arel, binds = binds_from_relation arel, []
-            sql = to_sql(arel, binds)
-          end
-          execute_and_clear(sql, name, binds, &:values)
-        end
-
-        # The internal PostgreSQL identifier of the money data type.
-        MONEY_COLUMN_TYPE_OID = 790 # :nodoc:
-        # The internal PostgreSQL identifier of the BYTEA data type.
-        BYTEA_COLUMN_TYPE_OID = 17 # :nodoc:
-
-        # create a 2D array representing the result set
-        def result_as_array(res) # :nodoc:
-          # check if we have any binary column and if they need escaping
-          ftypes = Array.new(res.nfields) do |i|
-            [i, res.ftype(i)]
-          end
-
-          rows = res.values
-          return rows unless ftypes.any? do |_, x|
-            [BYTEA_COLUMN_TYPE_OID, MONEY_COLUMN_TYPE_OID].include?(x)
-          end
-
-          typehash = ftypes.group_by { |_, type| type }
-          binaries = typehash[BYTEA_COLUMN_TYPE_OID] || []
-          monies   = typehash[MONEY_COLUMN_TYPE_OID] || []
-
-          rows.each do |row|
-            # unescape string passed BYTEA field (OID == 17)
-            binaries.each do |index, _|
-              row[index] = unescape_bytea(row[index])
-            end
-
-            # If this is a money type column and there are any currency symbols,
-            # then strip them off. Indeed it would be prettier to do this in
-            # PostgreSQLColumn.string_to_decimal but would break form input
-            # fields that call value_before_type_cast.
-            monies.each do |index, _|
-              data = row[index]
-              # Because money output is formatted according to the locale, there are two
-              # cases to consider (note the decimal separators):
-              #  (1) $12,345,678.12
-              #  (2) $12.345.678,12
-              case data
-              when /^-?\D+[\d,]+\.\d{2}$/ # (1)
-                data.gsub!(/[^-\d.]/, '')
-              when /^-?\D+[\d.]+,\d{2}$/ # (2)
-                data.gsub!(/[^-\d,]/, '').sub!(/,/, '.')
-              end
-            end
-          end
+        def explain(arel, binds = [], options = [])
+          sql    = build_explain_clause(options) + " " + to_sql(arel, binds)
+          result = internal_exec_query(sql, "EXPLAIN", binds)
+          PostgreSQL::ExplainPrettyPrinter.new.pp(result)
         end
 
         # Queries the database and returns the results in an Array-like object
         def query(sql, name = nil) # :nodoc:
+          mark_transaction_written_if_write(sql)
+
           log(sql, name) do
-            result_as_array @raw_connection.async_exec(sql)
+            with_raw_connection do |conn|
+              result = conn.async_exec(sql).map_types!(@type_map_for_results).values
+              verified!
+              result
+            end
           end
+        end
+
+        READ_QUERY = ActiveRecord::ConnectionAdapters::AbstractAdapter.build_read_query_regexp(
+          :close, :declare, :fetch, :move, :set, :show
+        ) # :nodoc:
+        private_constant :READ_QUERY
+
+        def write_query?(sql) # :nodoc:
+          !READ_QUERY.match?(sql)
+        rescue ArgumentError # Invalid encoding
+          !READ_QUERY.match?(sql.b)
         end
 
         # Executes an SQL statement, returning a PG::Result object on success
         # or raising a PG::Error exception otherwise.
-        def execute(sql, name = nil)
-          log(sql, name) do
-            @raw_connection.async_exec(sql)
+        #
+        # Setting +allow_retry+ to true causes the db to reconnect and retry
+        # executing the SQL statement in case of a connection-related exception.
+        # This option should only be enabled for known idempotent queries.
+        #
+        # Note: the PG::Result object is manually memory managed; if you don't
+        # need it specifically, you may want consider the <tt>exec_query</tt> wrapper.
+        def execute(...) # :nodoc:
+          super
+        ensure
+          @notice_receiver_sql_warnings = []
+        end
+
+        def raw_execute(sql, name, async: false, allow_retry: false, materialize_transactions: true)
+          log(sql, name, async: async) do
+            with_raw_connection(allow_retry: allow_retry, materialize_transactions: materialize_transactions) do |conn|
+              result = conn.async_exec(sql)
+              verified!
+              handle_warnings(result)
+              result
+            end
           end
         end
 
-        def exec_query(sql, name = 'SQL', binds = [], prepare: false)
-          execute_and_clear(sql, name, binds, prepare: prepare) do |result|
+        def internal_exec_query(sql, name = "SQL", binds = [], prepare: false, async: false, allow_retry: false, materialize_transactions: true) # :nodoc:
+          execute_and_clear(sql, name, binds, prepare: prepare, async: async, allow_retry: allow_retry, materialize_transactions: materialize_transactions) do |result|
             types = {}
             fields = result.fields
             fields.each_with_index do |fname, i|
               ftype = result.ftype i
               fmod  = result.fmod i
-              types[fname] = get_oid_type(ftype, fmod, fname)
+              types[fname] = types[i] = get_oid_type(ftype, fmod, fname)
             end
-            ActiveRecord::Result.new(fields, result.values, types)
+            build_result(columns: fields, rows: result.values, column_types: types)
           end
         end
-        alias internal_exec_query exec_query
 
-        def exec_delete(sql, name = nil, binds = [])
-          execute_and_clear(sql, name, binds, &:cmd_tuples)
+        def exec_delete(sql, name = nil, binds = []) # :nodoc:
+          execute_and_clear(sql, name, binds) { |result| result.cmd_tuples }
         end
-        alias exec_update exec_delete
+        alias :exec_update :exec_delete
 
-        def sql_for_insert(sql, pk, binds, returning)
-          if pk.nil?
-            # Extract the table from the insert sql. Yuck.
-            table_ref = extract_table_ref_from_insert_sql(sql)
-            pk = primary_key(table_ref) if table_ref
-          end
-
-          sql = "#{sql} RETURNING #{quote_column_name(pk)}" if pk && use_insert_returning?
-
-          super
-        end
-
-        def exec_insert(sql, name = nil, binds = [], pk = nil, sequence_name = nil, returning: nil)
-          val = exec_query(sql, name, binds)
-          if !use_insert_returning? && pk
+        def exec_insert(sql, name = nil, binds = [], pk = nil, sequence_name = nil, returning: nil) # :nodoc:
+          if use_insert_returning? || pk == false
+            super
+          else
+            result = internal_exec_query(sql, name, binds)
             unless sequence_name
               table_ref = extract_table_ref_from_insert_sql(sql)
-              sequence_name = default_sequence_name(table_ref, pk)
-              return val unless sequence_name
+              if table_ref
+                pk = primary_key(table_ref) if pk.nil?
+                pk = suppress_composite_primary_key(pk)
+                sequence_name = default_sequence_name(table_ref, pk)
+              end
+              return result unless sequence_name
             end
             last_insert_id_result(sequence_name)
-          else
-            val
           end
         end
 
         # Begins a transaction.
         def begin_db_transaction
-          execute 'BEGIN'
+          internal_execute('BEGIN', allow_retry: true, materialize_transactions: false)
         end
 
         def begin_isolated_db_transaction(isolation)
           begin_db_transaction
-          execute "SET TRANSACTION ISOLATION LEVEL #{transaction_isolation_levels.fetch(isolation)}"
+          internal_execute("SET TRANSACTION ISOLATION LEVEL #{transaction_isolation_levels.fetch(isolation)}", allow_retry: true, materialize_transactions: false)
         end
 
         # Commits a transaction.
         def commit_db_transaction
-          execute 'COMMIT'
+          internal_execute('COMMIT', allow_retry: false, materialize_transactions: true)
         end
 
         # Aborts a transaction.
         def exec_rollback_db_transaction
-          execute 'ROLLBACK'
+          internal_execute(execute 'ROLLBACK', allow_retry: false, materialize_transactions: true)
+        end
+
+        def exec_restart_db_transaction # :nodoc:
+          cancel_any_running_query
+          internal_execute("ROLLBACK AND CHAIN", "TRANSACTION", allow_retry: false, materialize_transactions: true)
+        end
+
+        # From https://www.postgresql.org/docs/current/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT
+        HIGH_PRECISION_CURRENT_TIMESTAMP = Arel.sql("CURRENT_TIMESTAMP").freeze # :nodoc:
+        private_constant :HIGH_PRECISION_CURRENT_TIMESTAMP
+
+        def high_precision_current_timestamp
+          HIGH_PRECISION_CURRENT_TIMESTAMP
+        end
+
+        def build_explain_clause(options = [])
+          return "EXPLAIN" if options.empty?
+
+          "EXPLAIN (#{options.join(", ").upcase})"
+        end
+
+        private
+
+        IDLE_TRANSACTION_STATUSES = [PG::PQTRANS_IDLE, PG::PQTRANS_INTRANS, PG::PQTRANS_INERROR]
+        private_constant :IDLE_TRANSACTION_STATUSES
+
+        def cancel_any_running_query
+          return if @raw_connection.nil? || IDLE_TRANSACTION_STATUSES.include?(@raw_connection.transaction_status)
+
+          @raw_connection.cancel
+          @raw_connection.block
+        rescue PG::Error
+        end
+
+        # Returns the current ID of a table's sequence.
+        def last_insert_id_result(sequence_name)
+          internal_exec_query("SELECT currval(#{quote(sequence_name)})", "SQL")
+        end
+
+        def returning_column_values(result)
+          result.rows.first
+        end
+
+        def suppress_composite_primary_key(pk)
+          pk unless pk.is_a?(Array)
+        end
+
+        def handle_warnings(sql)
+          @notice_receiver_sql_warnings.each do |warning|
+            next if warning_ignored?(warning)
+
+            warning.sql = sql
+            ActiveRecord.db_warnings_action.call(warning)
+          end
+        end
+
+        def warning_ignored?(warning)
+          ["WARNING", "ERROR", "FATAL", "PANIC"].exclude?(warning.level) || super
         end
       end
     end
