@@ -57,14 +57,8 @@ module ActiveRecord
           execute "DROP DATABASE #{quote_table_name(name)}"
         end
 
-        # Returns the list of all tables in the schema search path or a specified schema.
-        def tables(name = nil)
-          if name
-            ActiveSupport::Deprecation.warn(<<-MSG.squish)
-              Passing arguments to #tables is deprecated without replacement.
-            MSG
-          end
-
+        # Returns an array of table names defined in the database.
+        def tables
           select_values('SELECT tablename FROM pg_tables WHERE schemaname = ANY(current_schemas(false))', 'SCHEMA')
         end
 
@@ -83,13 +77,17 @@ module ActiveRecord
         # If the schema is not specified as part of +name+ then it will only find tables within
         # the current schema search path (regardless of permissions to access tables in other schemas)
         def table_exists?(name)
-          ActiveSupport::Deprecation.warn(<<-MSG.squish)
-            #table_exists? currently checks both tables and views.
-            This behavior is deprecated and will be changed with Rails 5.1 to only check tables.
-            Use #data_source_exists? instead.
-          MSG
+          name = Utils.extract_schema_qualified_name(name.to_s)
+          return false unless name.identifier
 
-          data_source_exists?(name)
+          select_value(<<-SQL, 'SCHEMA').to_i > 0
+              SELECT COUNT(*)
+              FROM pg_class c
+              LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE c.relkind = 'r' -- (r)elation/table
+              AND c.relname = '#{name.identifier}'
+              AND n.nspname = #{name.schema ? "'#{name.schema}'" : 'ANY (current_schemas(false))'}
+          SQL
         end
 
         def data_source_exists?(name)
