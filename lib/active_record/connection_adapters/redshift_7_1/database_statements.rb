@@ -113,7 +113,7 @@ module ActiveRecord
 
         # Aborts a transaction.
         def exec_rollback_db_transaction
-          internal_execute(execute 'ROLLBACK', allow_retry: false, materialize_transactions: true)
+          internal_execute('ROLLBACK', allow_retry: false, materialize_transactions: true)
         end
 
         def exec_restart_db_transaction # :nodoc:
