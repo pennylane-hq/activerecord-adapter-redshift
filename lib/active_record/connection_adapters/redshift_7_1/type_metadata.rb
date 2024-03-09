@@ -4,36 +4,40 @@ module ActiveRecord
   module ConnectionAdapters
     module Redshift
       class TypeMetadata < DelegateClass(SqlTypeMetadata)
-        attr_reader :oid, :fmod, :array
+        undef to_yaml if method_defined?(:to_yaml)
+
+        include Deduplicable
+
+        attr_reader :oid, :fmod
 
         def initialize(type_metadata, oid: nil, fmod: nil)
           super(type_metadata)
-          @type_metadata = type_metadata
           @oid = oid
           @fmod = fmod
-          @array = /\[\]$/ === type_metadata.sql_type
-        end
-
-        def sql_type
-          super.gsub(/\[\]$/, '')
         end
 
         def ==(other)
-          other.is_a?(Redshift::TypeMetadata) &&
-            attributes_for_hash == other.attributes_for_hash
+          other.is_a?(TypeMetadata) &&
+            __getobj__ == other.__getobj__ &&
+            oid == other.oid &&
+            fmod == other.fmod
         end
         alias eql? ==
 
         def hash
-          attributes_for_hash.hash
+          TypeMetadata.hash ^
+            __getobj__.hash ^
+            oid.hash ^
+            fmod.hash
         end
 
-        protected
-
-        def attributes_for_hash
-          [self.class, @type_metadata, oid, fmod]
+        private
+        def deduplicated
+          __setobj__(__getobj__.deduplicate)
+          super
         end
       end
     end
+    RedshiftTypeMetadata = Redshift::TypeMetadata
   end
 end
