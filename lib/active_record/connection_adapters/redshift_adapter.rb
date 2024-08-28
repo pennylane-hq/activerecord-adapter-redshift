@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'pg'
+require 'active_record'
 require 'active_record/connection_adapters'
 
 if ActiveRecord.version >= Gem::Version.new('7.1.0')
