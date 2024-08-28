@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 require 'pg'
-require "active_record"
-require "active_record/connection_adapters"
+require 'active_record/connection_adapters'
 
 if ActiveRecord.version >= Gem::Version.new('7.1.0')
   require_relative 'redshift_7_1_adapter'
@@ -13,5 +12,5 @@ else
 end
 
 if ActiveRecord.version >= Gem::Version.new('7.2.0')
-  ActiveRecord::ConnectionAdapters.register("redshift", "ActiveRecord::ConnectionAdapters::RedshiftAdapter", "active_record/connection_adapters/redshift_adapter")
+  ActiveRecord::ConnectionAdapters.register('redshift', 'ActiveRecord::ConnectionAdapters::RedshiftAdapter', 'active_record/connection_adapters/redshift_adapter')
 end
