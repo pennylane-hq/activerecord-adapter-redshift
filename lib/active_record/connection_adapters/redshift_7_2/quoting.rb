@@ -24,7 +24,7 @@ module ActiveRecord
 
           # Quotes column names for use in SQL queries.
           def quote_column_name(name) # :nodoc:
-            QUOTED_COLUMN_NAMES[name] ||= PG::Connection.quote_ident(super).freeze
+            QUOTED_COLUMN_NAMES[name] ||= PG::Connection.quote_ident(name.to_s).freeze
           end
 
           def column_name_matcher
