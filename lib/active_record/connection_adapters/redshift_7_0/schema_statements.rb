@@ -24,7 +24,7 @@ module ActiveRecord
       module SchemaStatements
         # Drops the database specified on the +name+ attribute
         # and creates it again using the provided +options+.
-        def recreate_database(name, **options) # :nodoc:
+        def recreate_database(name, options = {}) # :nodoc:
           drop_database(name)
           create_database(name, options)
         end
@@ -37,7 +37,7 @@ module ActiveRecord
         # Example:
         #   create_database config[:database], config
         #   create_database 'foo_development', encoding: 'unicode'
-        def create_database(name, **options)
+        def create_database(name, options = {})
           options = { encoding: 'utf8' }.merge!(options.symbolize_keys)
 
           option_string = options.inject('') do |memo, (key, value)|

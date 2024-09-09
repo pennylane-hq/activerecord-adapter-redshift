@@ -20,7 +20,6 @@ require 'pg'
 
 require 'ipaddr'
 
-ActiveRecord::Tasks::DatabaseTasks.register_task(/redshift/, 'ActiveRecord::Tasks::PostgreSQLDatabaseTasks')
 module ActiveRecord
   module ConnectionHandling # :nodoc:
 

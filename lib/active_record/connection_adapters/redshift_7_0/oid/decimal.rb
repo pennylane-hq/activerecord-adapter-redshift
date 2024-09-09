@@ -5,7 +5,7 @@ module ActiveRecord
     module Redshift
       module OID # :nodoc:
         class Decimal < Type::Decimal # :nodoc:
-          def infinity(**options)
+          def infinity(options = {})
             BigDecimal('Infinity') * (options[:negative] ? -1 : 1)
           end
         end
