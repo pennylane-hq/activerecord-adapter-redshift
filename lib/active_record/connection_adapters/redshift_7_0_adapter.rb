@@ -330,13 +330,17 @@ module ActiveRecord
       def translate_exception(exception, message:, sql:, binds:)
         return exception unless exception.respond_to?(:result)
 
-        case exception.message
-        when /duplicate key value violates unique constraint/
-          RecordNotUnique.new(message, exception)
-        when /violates foreign key constraint/
-          InvalidForeignKey.new(message, exception)
+        if exception.is_a?(PG::DuplicateDatabase)
+          DatabaseAlreadyExists.new(message, sql: sql, binds: binds)
         else
-          super
+          case exception.message
+          when /duplicate key value violates unique constraint/
+            RecordNotUnique.new(message, exception)
+          when /violates foreign key constraint/
+            InvalidForeignKey.new(message, exception)
+          else
+            super
+          end
         end
       end
 
