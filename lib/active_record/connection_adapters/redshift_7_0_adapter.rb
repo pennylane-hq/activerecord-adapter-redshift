@@ -333,14 +333,7 @@ module ActiveRecord
         if exception.is_a?(PG::DuplicateDatabase)
           DatabaseAlreadyExists.new(message, sql: sql, binds: binds)
         else
-          case exception.message
-          when /duplicate key value violates unique constraint/
-            RecordNotUnique.new(message, exception)
-          when /violates foreign key constraint/
-            InvalidForeignKey.new(message, exception)
-          else
-            super
-          end
+          super
         end
       end
 
