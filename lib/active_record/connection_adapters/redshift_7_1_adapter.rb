@@ -720,11 +720,6 @@ module ActiveRecord
         END_SQL
       end
 
-      def extract_table_ref_from_insert_sql(sql)
-        sql[/into\s("[A-Za-z0-9_."\[\]\s]+"|[A-Za-z0-9_."\[\]]+)\s*/im]
-        Regexp.last_match(1)&.strip
-      end
-
       def arel_visitor
         Arel::Visitors::PostgreSQL.new(self)
       end
