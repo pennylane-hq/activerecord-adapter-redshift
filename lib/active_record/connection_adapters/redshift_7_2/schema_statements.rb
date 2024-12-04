@@ -230,7 +230,7 @@ module ActiveRecord
         end
 
         def serial_sequence(table, column)
-          select_value("SELECT pg_get_serial_sequence('#{table}', '#{column}')", 'SCHEMA')
+          select_value("SELECT pg_get_serial_sequence(#{quote(table)}, #{quote(column)})".tap { puts _1 }, 'SCHEMA')
         end
 
         def set_pk_sequence!(table, value); end
