@@ -220,17 +220,17 @@ module ActiveRecord
         end
 
         # Returns the sequence name for a table's primary key or some other specified key.
-        def default_sequence_name(table_name, pk = nil) # :nodoc:
-          result = serial_sequence(table_name, pk || 'id')
+        def default_sequence_name(table_name, pk = 'id') # :nodoc:
+          result = serial_sequence(table_name, pk)
           return nil unless result
 
           Utils.extract_schema_qualified_name(result).to_s
         rescue ActiveRecord::StatementInvalid
-          Redshift::Name.new(nil, "#{table_name}_#{pk || 'id'}_seq").to_s
+          Redshift::Name.new(nil, "#{table_name}_#{pk}_seq").to_s
         end
 
         def serial_sequence(table, column)
-          select_value("SELECT pg_get_serial_sequence('#{table}', '#{column}')", 'SCHEMA')
+          select_value("SELECT pg_get_serial_sequence(#{quote(table)}, #{quote(column)})", 'SCHEMA')
         end
 
         def set_pk_sequence!(table, value); end

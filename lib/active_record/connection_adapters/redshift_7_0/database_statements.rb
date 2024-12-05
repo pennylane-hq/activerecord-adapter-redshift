@@ -207,6 +207,11 @@ module ActiveRecord
           end
         end
 
+        # Returns the current ID of a table's sequence.
+        def last_insert_id_result(sequence_name)
+          internal_exec_query("SELECT currval(#{quote(sequence_name)})", "SQL")
+        end
+
         # Begins a transaction.
         def begin_db_transaction
           execute 'BEGIN'

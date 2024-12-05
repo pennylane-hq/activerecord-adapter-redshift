@@ -689,11 +689,6 @@ module ActiveRecord
         end
       end
 
-      def last_insert_id_result(sequence_name)
-        # :nodoc:
-        exec_query("SELECT currval('#{sequence_name}')", 'SQL')
-      end
-
       # Returns the list of a table's column names, data types, and default values.
       #
       # The underlying query is roughly:
@@ -723,11 +718,6 @@ module ActiveRecord
                  AND a.attnum > 0 AND NOT a.attisdropped
                ORDER BY a.attnum
         END_SQL
-      end
-
-      def extract_table_ref_from_insert_sql(sql)
-        sql[/into\s("[A-Za-z0-9_."\[\]\s]+"|[A-Za-z0-9_."\[\]]+)\s*/im]
-        Regexp.last_match(1)&.strip
       end
 
       def arel_visitor
